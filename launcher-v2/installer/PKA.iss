@@ -1,7 +1,7 @@
 [Setup]
 AppId={{94CB85DC-2356-4C38-904B-38BC51226FB3}
 AppName=Litfix
-AppVersion=2.0.18.0
+AppVersion=2.0.26.0
 AppPublisher=Lushen16
 AppPublisherURL=https://github.com/Lushen16/LIT-fix
 DefaultDirName={localappdata}\Programs\Litfix
@@ -12,7 +12,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=..
-OutputBaseFilename=Litfix-Setup-2.0.18.0
+OutputBaseFilename=Litfix-Setup-2.0.26.0
 SetupIconFile=..\PKAproxy.ico
 UninstallDisplayIcon={app}\Litfix-brand-2.0.5.ico
 Compression=lzma2
@@ -82,6 +82,11 @@ var ResultCode: Integer;
 begin
   Result := False;
   if FileExists(ExpandConstant('{app}\PKA-Proxy.exe')) then begin
+    if not ShellExec('runas', ExpandConstant('{app}\PKA-Proxy.exe'), '--wireguard-remove', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then exit;
+    if ResultCode <> 0 then begin
+      MsgBox('Desative a VPN na opção WireGuard VPN antes de desinstalar.', mbError, MB_OK);
+      exit;
+    end;
     if not ShellExec('runas', ExpandConstant('{app}\PKA-Proxy.exe'), '--discord-disable', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then begin
       MsgBox('Permita a remoção da proxy permanente do Discord para desinstalar.', mbError, MB_OK);
       exit;

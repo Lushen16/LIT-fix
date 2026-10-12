@@ -1,5 +1,5 @@
 using System;using System.IO;using System.Text;using System.Diagnostics;using System.Security.Cryptography;using System.Security.Principal;using System.Web.Script.Serialization;using System.IO.Pipes;using System.Threading;
-public sealed class EngineRequest {public RoutingOptions Route;public string Host,User,Password,OwnerPath;public string Protocol="SOCKS5",TlsName="";public bool ProxyTls=true,PermanentDiscord;public int Port,OwnerPid;public long OwnerStart,DashboardStamp,DashboardOwnerStart;public int DashboardOwnerPid;public DiscordProfile DiscordOverlay;}
+public sealed class EngineRequest {public RoutingOptions Route;public string Host,User,Password,OwnerPath;public string Protocol="SOCKS5",TlsName="";public bool ProxyTls=true,PermanentDiscord;public int Port,OwnerPid;public long OwnerStart,DashboardStamp,DashboardOwnerStart;public int DashboardOwnerPid;public DiscordProfile DiscordOverlay;public WireGuardProfile WireGuard;}
 public static class EngineController
 {
     public static string PipeName {get{return "PKAproxy-TUN-"+WindowsIdentity.GetCurrent().User.Value;}}
@@ -47,11 +47,11 @@ public static class EngineController
         using(var process=Process.Start(new ProcessStartInfo(Process.GetCurrentProcess().MainModule.FileName,"--guard-release"){UseShellExecute=true,Verb="runas"}))
         {if(!process.WaitForExit(20000))throw new IOException("A liberação não foi confirmada. Verifique o aviso do Windows.");if(process.ExitCode!=0)throw new IOException("Não foi possível remover o bloqueio. Execute Recuperar-rede.cmd como administrador.");}
     }
-    public static string RoutedIp(bool insideEngine=false)
+    public static string RoutedIp(bool insideEngine=false,bool discordProbe=false)
     {
-        if(!insideEngine&&(Mode()=="DISCORD"||Mode()=="COMBINED")){string value=Command("IP",25000);System.Net.IPAddress ip;if(!System.Net.IPAddress.TryParse(value,out ip))throw new IOException("O túnel Discord não confirmou o IP.");return ip.ToString();}
+        if(!insideEngine&&(Mode()=="DISCORD"||Mode()=="COMBINED")){string value=Command(discordProbe?"DISCORDIP":"IP",25000);System.Net.IPAddress ip;if(!System.Net.IPAddress.TryParse(value,out ip))throw new IOException("O túnel Discord não confirmou o IP.");return ip.ToString();}
         string root=Path.Combine(AppPaths.Root,"probe");Directory.CreateDirectory(root);
-        string exe=Path.Combine(root,"PKArouteProbe.exe"),result=Path.Combine(root,Guid.NewGuid().ToString("N")+".txt");
+        string exe=Path.Combine(root,discordProbe?"DiscordrouteProbe.exe":"PKArouteProbe.exe"),result=Path.Combine(root,Guid.NewGuid().ToString("N")+".txt");
         using(var s=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PKArouteProbe.exe"))using(var f=File.Create(exe))s.CopyTo(f);
         try {using(var p=Process.Start(new ProcessStartInfo(exe,"\""+result+"\""){UseShellExecute=false,CreateNoWindow=true})){if(!p.WaitForExit(20000)){p.Kill();throw new IOException("Consulta de roteamento expirou.");}if(p.ExitCode!=0)throw new IOException("Falha HTTPS no processo de teste.");}return File.ReadAllText(result).Trim();}
         finally{if(File.Exists(result))File.Delete(result);}

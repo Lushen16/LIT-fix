@@ -4,6 +4,7 @@ public static class TunConfiguration
  static Dictionary<string,object> Map(params object[] p){var d=new Dictionary<string,object>();for(int i=0;i<p.Length;i+=2)d[(string)p[i]]=p[i+1];return d;}
  public static string Build(EngineRequest r)
  {
+  if(r.WireGuard!=null||(r.DiscordOverlay!=null&&r.DiscordOverlay.WireGuard!=null))return DiscordWireGuard.Build(r);
   RoutingConfiguration.ValidateProxy(r.Host,r.Port,r.User,r.Password);
   bool https=String.Equals(r.Protocol,"HTTPS",StringComparison.Ordinal);
   if(!String.IsNullOrEmpty(r.Protocol)&&r.Protocol!="SOCKS5"&&!https)throw new ArgumentException("Protocolo inválido.");

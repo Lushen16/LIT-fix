@@ -2,9 +2,9 @@ using System;using System.IO;using System.Text;using System.Diagnostics;using Sy
 public static class TunRuntime
 {
     const string CoreHash="7BBEF1DEA9189EE12799AE834EA4B4658355DA25C47A21AD8804904C0CCD9410";
-    static string log;static string user="",password="",discordUser="",discordPassword="";static readonly object logLock=new object();
+    static string wireguardKey="",wireguardPreshared="";static string log;static string user="",password="",discordUser="",discordPassword="";static readonly object logLock=new object();
     static void Log(string value)
-    {if(value==null)return;if(user.Length>0)value=value.Replace(user,"[usuario]");if(password.Length>0)value=value.Replace(password,"[senha]");if(discordUser.Length>0)value=value.Replace(discordUser,"[usuario-discord]");if(discordPassword.Length>0)value=value.Replace(discordPassword,"[senha-discord]");lock(logLock){try {if(File.Exists(log)&&new FileInfo(log).Length>262144)File.WriteAllText(log,"");File.AppendAllText(log,value+Environment.NewLine);}catch{}}}
+    {if(value==null)return;if(wireguardKey.Length>0)value=value.Replace(wireguardKey,"[chave-wireguard]");if(wireguardPreshared.Length>0)value=value.Replace(wireguardPreshared,"[chave-compartilhada]");if(user.Length>0)value=value.Replace(user,"[usuario]");if(password.Length>0)value=value.Replace(password,"[senha]");if(discordUser.Length>0)value=value.Replace(discordUser,"[usuario-discord]");if(discordPassword.Length>0)value=value.Replace(discordPassword,"[senha-discord]");lock(logLock){try {if(File.Exists(log)&&new FileInfo(log).Length>262144)File.WriteAllText(log,"");File.AppendAllText(log,value+Environment.NewLine);}catch{}}}
     static void ProtectDirectory(string path)
     {
         if(Directory.Exists(path)&&(File.GetAttributes(path)&FileAttributes.ReparsePoint)!=0)throw new IOException("Pasta do motor não pode ser um link.");
@@ -68,14 +68,15 @@ public static class TunRuntime
             requestPath=Path.GetFullPath(args[1]);string prefix=Path.GetFullPath(AppPaths.Root)+Path.DirectorySeparatorChar;
             if(!requestPath.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)||!Path.GetFileName(requestPath).StartsWith("engine-")||new FileInfo(requestPath).Length>65536)throw new ArgumentException("Pedido de conexão inválido.");
             var request=new JavaScriptSerializer().Deserialize<EngineRequest>(Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(requestPath),null,DataProtectionScope.CurrentUser)));
-            user=request.User;password=request.Password;discordUser=request.DiscordOverlay==null?"":request.DiscordOverlay.User;discordPassword=request.DiscordOverlay==null?"":request.DiscordOverlay.Password;
+            var wg=request.DiscordOverlay==null?request.WireGuard:request.DiscordOverlay.WireGuard;wireguardKey=wg==null?"":wg.PrivateKey;wireguardPreshared=wg==null?"":wg.PresharedKey??"";
+            user=request.User??"";password=request.Password;discordUser=request.DiscordOverlay==null?"":request.DiscordOverlay.User;discordPassword=request.DiscordOverlay==null?"":request.DiscordOverlay.Password;
             singleton=new Mutex(false,@"Global\PKAproxy-TUN");try{owns=singleton.WaitOne(0);}catch(AbandonedMutexException){owns=true;}
             if(!owns)throw new InvalidOperationException("Já existe um motor Global ativo. Desconecte a outra instância.");
             if(NetworkGuard.ArmedState==null||(NetworkGuard.IsArmed&&!(request.PermanentDiscord&&DiscordProxy.OwnsGuard)))throw new InvalidOperationException("Proteção anterior instalada ou estado indisponível. Libere explicitamente a rede antes de ativar outra sessão.");
             string json=TunConfiguration.Build(request);
             if(!OwnerAlive(request))throw new IOException("A janela que solicitou conexão foi encerrada.");
-            ProxyDiagnostics.ProxyIp(request.Host,request.Port,request.User,request.Password,request.Protocol,request.ProxyTls,request.TlsName);
-            if(request.Route.Udp)ProxyDiagnostics.CheckUdp(request.Host,request.Port,request.User,request.Password,request.Protocol);
+            if(request.WireGuard==null)ProxyDiagnostics.ProxyIp(request.Host,request.Port,request.User,request.Password,request.Protocol,request.ProxyTls,request.TlsName);
+            if(request.WireGuard==null&&request.Route.Udp)ProxyDiagnostics.CheckUdp(request.Host,request.Port,request.User,request.Password,request.Protocol);
             string exe=InstallCore();config=Path.Combine(Path.GetDirectoryName(exe),"active.json");File.WriteAllText(config,json,new UTF8Encoding(false));
             using(var check=Process.Start(new ProcessStartInfo(exe,"check -c \""+config+"\""){UseShellExecute=false,CreateNoWindow=true,RedirectStandardError=true,RedirectStandardOutput=true}))
             {string errors=check.StandardError.ReadToEnd();if(!check.WaitForExit(15000)||check.ExitCode!=0){Log(errors);throw new IOException("O motor rejeitou a configuração. Abra Diagnóstico.");}}
@@ -83,6 +84,7 @@ public static class TunRuntime
             string probe=Path.Combine(AppPaths.Root,"probe","PKArouteProbe.exe");
             Directory.CreateDirectory(Path.GetDirectoryName(probe));
             using(var resource=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PKArouteProbe.exe"))using(var target=File.Create(probe))resource.CopyTo(target);
+            if(wg!=null)File.Copy(probe,Path.Combine(AppPaths.Root,"probe","DiscordrouteProbe.exe"),true);
             if(request.PermanentDiscord)DiscordProxy.MarkGuard();
             NetworkGuard.Apply(request,exe,probe,false);
             core=new Process {StartInfo=new ProcessStartInfo(exe,"run -c \""+config+"\""){UseShellExecute=false,CreateNoWindow=false,WindowStyle=ProcessWindowStyle.Hidden,RedirectStandardError=true,RedirectStandardOutput=true},EnableRaisingEvents=true};
@@ -90,7 +92,8 @@ public static class TunRuntime
             if(core.WaitForExit(3500))throw new IOException("Motor não iniciou. Abra Diagnóstico para ver o motivo.");
             NetworkGuard.Apply(request,exe,probe,true);
             // Probe is included in both the routing policy and persistent guard.
-            EngineController.RoutedIp(true);
+            bool isDiscordOnly = (request.PermanentDiscord || request.WireGuard != null) && request.DiscordOverlay == null;
+            EngineController.RoutedIp(true, isDiscordOnly || wg != null);
             var access=new PipeSecurity();access.AddAccessRule(new PipeAccessRule(WindowsIdentity.GetCurrent().User,PipeAccessRights.FullControl,AccessControlType.Allow));
             bool first=true,stop=false;DateTime lastDiscordScan=DateTime.UtcNow;
             while(!core.HasExited&&OwnerAlive(request)&&!stop&&!(request.PermanentDiscord&&(DiscordProxy.StopRequested||DiscordProxy.DashboardRevision!=request.DashboardStamp)))
@@ -105,7 +108,8 @@ public static class TunRuntime
                     {
                         writer.AutoFlush=true;var read=reader.ReadLineAsync();if(!read.Wait(2000))continue;
                         if(read.Result=="STOP"){StopCore(core);writer.WriteLine("STOPPED");stop=true;}
-                        else if(read.Result=="MODE")writer.WriteLine(request.DiscordOverlay!=null?"COMBINED":request.PermanentDiscord?"DISCORD":"NORMAL");
+                        else if(read.Result=="MODE")writer.WriteLine(request.DiscordOverlay!=null?"COMBINED":(request.PermanentDiscord||request.WireGuard!=null)?"DISCORD":"NORMAL");
+                        else if(read.Result=="DISCORDIP"){try{writer.WriteLine(EngineController.RoutedIp(true,wg!=null));}catch{writer.WriteLine("FAILED");}}
                         else if(read.Result=="IP"){try{writer.WriteLine(EngineController.RoutedIp(true));}catch{writer.WriteLine("FAILED");}}
                         else writer.WriteLine(read.Result=="STATUS"&&!core.HasExited?"RUNNING":"UNKNOWN");
                     }
@@ -113,7 +117,12 @@ public static class TunRuntime
             }
             return 0;
         }
-        catch(Exception e){Log(e.Message);if(requestPath!=null&&File.Exists(requestPath))try{File.WriteAllText(requestPath+".ready","Falha ao ativar TUN. Abra Diagnóstico: "+e.GetType().Name);}catch{}return 1;}
+        catch(Exception e){
+            Log(e.Message);
+            if(requestPath!=null&&File.Exists(requestPath))try{File.WriteAllText(requestPath+".ready","Falha ao ativar TUN. Abra Diagnóstico: "+e.GetType().Name);}catch{}
+            try{NetworkGuard.Release();}catch{}
+            return 1;
+        }
         finally
         {try{StopCore(core);}catch(Exception e){Log("Falha ao encerrar: "+e.GetType().Name);}if(job!=null)job.Dispose();if(core!=null)core.Dispose();if(config!=null)try{File.Delete(config);}catch{}if(owns)singleton.ReleaseMutex();if(singleton!=null)singleton.Dispose();}
     }

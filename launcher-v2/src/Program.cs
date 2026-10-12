@@ -6,6 +6,7 @@ static class Program
  [STAThread]static int Main(string[] args)
  {
   ServicePointManager.SecurityProtocol=SecurityProtocolType.Tls12;
+  if(args.Length>0&&args[0]=="--wireguard-remove"){try{WireGuardIntegration.Change(false);if(System.IO.File.Exists(WireGuardIntegration.Config))System.IO.File.Delete(WireGuardIntegration.Config);return 0;}catch{return 1;}}
   if(args.Length>0&&args[0]=="--discord-enable")return DiscordProxy.Enable();
   if(args.Length>0&&args[0]=="--discord-disable")return DiscordProxy.Disable();
   if(args.Length>0&&args[0]=="--discord-dashboard")return DiscordProxy.ApplyDashboard(args);

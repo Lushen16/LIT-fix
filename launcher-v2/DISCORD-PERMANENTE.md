@@ -1,4 +1,18 @@
-# Discord permanente — Litfix 2.0.18.0
+# Discord permanente — Litfix 2.0.20.0
+
+## Proton / WireGuard somente no Discord
+
+Selecione WireGuard / Proton VPN na aba Discord e use Importar Proton .conf. Localize o Discord.exe, feche o Discord e clique em Ativar permanente. Desconecte o aplicativo Proton VPN e desative qualquer VPN geral anterior antes de ativar. O modo por aplicativo usa o motor já incluído no Litfix; não exige o aplicativo oficial WireGuard.
+
+TCP e UDP IPv4 do Discord passam pelo endpoint WireGuard do arquivo importado. As demais aplicações saem diretamente quando a Proxy geral está parada. IPv6 do Discord permanece bloqueado. A tarefa do Windows mantém a conexão em segundo plano e inicia ao entrar na conta. Para trocar de servidor, remova a configuração e importe outro arquivo. O arquivo e as chaves são guardados no perfil cifrado com DPAPI; não são incluídos no instalador ou enviados ao GitHub.
+
+Testar VPN Discord consulta um processo de diagnóstico roteado pela mesma saída do Discord. No modo combinado, ele usa uma rota separada da Proxy geral. Isso verifica HTTPS de saída pelo túnel, sem medir o processo Discord ou uma chamada real. O servidor precisa estar disponível e aceitar a configuração. DNS tratado pelo motor usa Cloudflare: as opções NetShield do arquivo Proton não são reproduzidas. DNS do resolvedor compartilhado do Windows não permite atribuir toda consulta ao aplicativo que a originou.
+
+A opção lateral VPN geral mantém o teste que afeta todo o computador. Para uso exclusivo no Discord, utilize a aba Discord.
+
+Validação WireGuard: 32 verificações de importação, chaves, formato, armazenamento cifrado, rejeição de comandos, rotas TCP/UDP, saída direta de outras aplicações e composição com Proxy geral. As três configurações geradas foram aceitas pelo motor sing-box 1.14.2 incluído. Testes de abertura, pacote permanente e 69 verificações anteriores passaram. Não foram ativadas VPN, tarefa ou regras WFP para este teste; servidor Proton, chamada, reinicialização e saída por aplicação precisam de teste real com a configuração do usuário.
+
+## Proxy SOCKS5
 
 Na aba Discord, informe IPv4, porta, usuário e senha de uma SOCKS5. O Discord.exe é detectado automaticamente; Localizar Discord permite escolher uma instalação diferente. Feche o Discord e desative/libere qualquer túnel geral antes de ativar.
 

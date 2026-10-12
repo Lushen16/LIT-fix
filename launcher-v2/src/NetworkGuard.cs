@@ -61,6 +61,7 @@ public static class NetworkGuard
         if(IntPtr.Size!=8)throw new InvalidOperationException("A proteção exige processo x64.");
         ulong luid=0;if(allowTunnel)Check(ConvertInterfaceAliasToLuid("PKAproxy-TUN",out luid));
         var targets=new List<string>(request.Route.SelectedPaths());if(!targets.Contains(probe))targets.Add(probe);
+        if(request.WireGuard!=null||(request.DiscordOverlay!=null&&request.DiscordOverlay.WireGuard!=null))targets.Add(Path.Combine(AppPaths.Root,"probe","DiscordrouteProbe.exe"));
         var permits=new[]{core,request.OwnerPath};
         foreach(string path in targets)foreach(string permitted in permits)if(String.Equals(path,permitted,StringComparison.OrdinalIgnoreCase))throw new ArgumentException("O motor e a interface não podem ser apps protegidos.");
         IntPtr engine;Check(FwpmEngineOpen0(null,10,IntPtr.Zero,IntPtr.Zero,out engine));
@@ -71,9 +72,20 @@ public static class NetworkGuard
             var keys=new List<Guid>();
             foreach(Guid layer in new[]{V4,V6}){
                 foreach(string path in permits){Guid key=Key("permit:"+layer+":"+path.ToLowerInvariant());keys.Add(key);Add(engine,key,layer,path,true,null);}
-                Guid dnsKey=Key("dns:"+layer);keys.Add(dnsKey);Add(engine,dnsKey,layer,null,false,layer==V4&&allowTunnel?(ulong?)luid:null,true);
-                if(request.Route.Global){Guid key=Key("global:"+layer);keys.Add(key);Add(engine,key,layer,null,false,layer==V4&&allowTunnel?(ulong?)luid:null);}
-                else foreach(string path in targets){Guid key=Key("app:"+layer+":"+path.ToLowerInvariant());keys.Add(key);Add(engine,key,layer,path,false,layer==V4&&allowTunnel?(ulong?)luid:null);}
+                if(request.Route.Global){
+                    Guid dnsKey=Key("dns:"+layer);keys.Add(dnsKey);Add(engine,dnsKey,layer,null,false,layer==V4&&allowTunnel?(ulong?)luid:null,true);
+                    Guid key=Key("global:"+layer);keys.Add(key);Add(engine,key,layer,null,false,layer==V4&&allowTunnel?(ulong?)luid:null);
+                } else {
+                    for(int i=0;i<targets.Count;i++){
+                        string path=targets[i];
+                        Guid dnsKey=i==0?Key("dns:"+layer):Key("dns:"+layer+":"+path.ToLowerInvariant());
+                        keys.Add(dnsKey);
+                        Add(engine,dnsKey,layer,path,false,layer==V4&&allowTunnel?(ulong?)luid:null,true);
+                        Guid key=Key("app:"+layer+":"+path.ToLowerInvariant());
+                        keys.Add(key);
+                        Add(engine,key,layer,path,false,layer==V4&&allowTunnel?(ulong?)luid:null);
+                    }
+                }
             }
             // Journal includes old and new IDs before commit, allowing recovery after a crash.
             foreach(Guid key in keys)if(!previous.Contains(key))previous.Add(key);File.WriteAllLines(Manifest,previous.ConvertAll(k=>k.ToString()).ToArray());

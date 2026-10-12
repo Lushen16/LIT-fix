@@ -3,7 +3,7 @@ $ErrorActionPreference='Stop'
 $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 New-Item -ItemType Directory -Path $WorkDirectory -Force | Out-Null
 $root=Join-Path $PSScriptRoot 'src'
-$sources=@('RoutingConfiguration.cs','TunConfiguration.cs','SessionStore.cs','ProxyDiagnostics.cs','NetworkGuard.cs','DiscordProxy.cs','AppDiscovery.cs') | ForEach-Object {Join-Path $root $_}
+$sources=@('RoutingConfiguration.cs','TunConfiguration.cs','SessionStore.cs','ProxyDiagnostics.cs','NetworkGuard.cs','DiscordProxy.cs','AppDiscovery.cs','DiscordWireGuard.cs') | ForEach-Object {Join-Path $root $_}
 $sources+=Join-Path $PSScriptRoot 'tests\ProtocolTests.cs'
 $sources+=Join-Path $PSScriptRoot 'tests\DiscordTests.cs'
 $sources+=Join-Path $PSScriptRoot 'tests\CombinedTests.cs'

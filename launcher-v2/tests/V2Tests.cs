@@ -1,6 +1,6 @@
 using System;using System.IO;using System.Text;using System.Net;using System.Net.Sockets;using System.Threading.Tasks;using System.Collections.Generic;using System.Web.Script.Serialization;using System.Runtime.InteropServices;
 public static class AppPaths {public static string Root,ProtectedRoot;public static string SettingsFile(string name){return Path.Combine(Root,name);}}
-public class EngineRequest {public RoutingOptions Route;public string Host,User,Password,OwnerPath;public string Protocol="SOCKS5",TlsName="";public bool ProxyTls=true,PermanentDiscord;public int Port,OwnerPid;public long OwnerStart,DashboardStamp,DashboardOwnerStart;public int DashboardOwnerPid;public DiscordProfile DiscordOverlay;}
+public class EngineRequest {public RoutingOptions Route;public string Host,User,Password,OwnerPath;public string Protocol="SOCKS5",TlsName="";public bool ProxyTls=true,PermanentDiscord;public int Port,OwnerPid;public long OwnerStart,DashboardStamp,DashboardOwnerStart;public int DashboardOwnerPid;public DiscordProfile DiscordOverlay;public WireGuardProfile WireGuard;}
 class Tests
 {
  static int count;

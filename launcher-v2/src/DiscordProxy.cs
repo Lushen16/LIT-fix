@@ -1,7 +1,7 @@
 using System;using System.IO;using System.Text;using System.Diagnostics;using System.Threading;using System.Security.Cryptography;using System.Security.Principal;using System.Security.AccessControl;using System.Web.Script.Serialization;using System.Xml;
 public sealed class DiscordProfile
 {
- public string Host="",User="",Password="",DiscordPath="";public int Port=1080;
+ public string Host="",User="",Password="",DiscordPath="";public int Port=1080;public WireGuardProfile WireGuard;
 }
 public static class DiscordProxy
 {
@@ -18,15 +18,15 @@ public static class DiscordProxy
  public static void Save(DiscordProfile profile){Validate(profile);Directory.CreateDirectory(AppPaths.Root);File.WriteAllBytes(Draft,Encode(profile));}
  public static void Validate(DiscordProfile p)
  {
-  if(p==null)throw new ArgumentException("Configure a proxy do Discord.");RoutingConfiguration.ValidateProxy(p.Host,p.Port,p.User,p.Password);
-  System.Net.IPAddress ip;if(!System.Net.IPAddress.TryParse(p.Host,out ip)||ip.AddressFamily!=System.Net.Sockets.AddressFamily.InterNetwork)throw new ArgumentException("Informe o IPv4 da SOCKS5.");
+  if(p==null)throw new ArgumentException("Configure a conexão do Discord.");if(p.WireGuard!=null)WireGuardProfile.Validate(p.WireGuard);else{RoutingConfiguration.ValidateProxy(p.Host,p.Port,p.User,p.Password);
+  System.Net.IPAddress ip;if(!System.Net.IPAddress.TryParse(p.Host,out ip)||ip.AddressFamily!=System.Net.Sockets.AddressFamily.InterNetwork)throw new ArgumentException("Informe o IPv4 da SOCKS5.");}
   if(!File.Exists(p.DiscordPath)||!String.Equals(Path.GetFileName(p.DiscordPath),"Discord.exe",StringComparison.OrdinalIgnoreCase))throw new ArgumentException("Localize o Discord.exe instalado.");
  }
  public static string TaskXml(string sid,string executable)
  {
   var text=new StringBuilder();using(var x=XmlWriter.Create(text,new XmlWriterSettings{Indent=true})){
    x.WriteStartElement("Task","http://schemas.microsoft.com/windows/2004/02/mit/task");x.WriteAttributeString("version","1.2");
-   x.WriteStartElement("RegistrationInfo");x.WriteElementString("Description","Litfix: proxy SOCKS5 exclusiva do Discord.");x.WriteEndElement();
+   x.WriteStartElement("RegistrationInfo");x.WriteElementString("Description","Litfix: conexão permanente exclusiva do Discord.");x.WriteEndElement();
    x.WriteStartElement("Triggers");x.WriteStartElement("LogonTrigger");x.WriteElementString("Enabled","true");x.WriteElementString("UserId",sid);x.WriteEndElement();x.WriteEndElement();
    x.WriteStartElement("Principals");x.WriteStartElement("Principal");x.WriteAttributeString("id","User");x.WriteElementString("UserId",sid);x.WriteElementString("LogonType","InteractiveToken");x.WriteElementString("RunLevel","HighestAvailable");x.WriteEndElement();x.WriteEndElement();
    x.WriteStartElement("Settings");x.WriteElementString("MultipleInstancesPolicy","IgnoreNew");x.WriteElementString("DisallowStartIfOnBatteries","false");x.WriteElementString("StopIfGoingOnBatteries","false");x.WriteElementString("AllowHardTerminate","true");x.WriteElementString("StartWhenAvailable","true");x.WriteElementString("Enabled","true");x.WriteElementString("ExecutionTimeLimit","PT0S");x.WriteStartElement("RestartOnFailure");x.WriteElementString("Interval","PT1M");x.WriteElementString("Count","3");x.WriteEndElement();x.WriteEndElement();
@@ -58,10 +58,17 @@ public static class DiscordProxy
  {
   bool installed=false;try{
    RequireAdmin();var profile=Load();Validate(profile);
+   if(profile.WireGuard!=null){
+    try{
+     using(var p=Process.Start(new ProcessStartInfo("powershell", "-NoProfile -NonInteractive -Command \"Enable-NetAdapterBinding -Name * -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue\""){UseShellExecute=false,CreateNoWindow=true,WindowStyle=ProcessWindowStyle.Hidden})){
+      p.WaitForExit(7000);
+     }
+    }catch{}
+   }
    if(HasConfiguration)throw new InvalidOperationException("Remova a configuração permanente antes de alterar a proxy.");
    if(EngineController.Status().StartsWith("Motor ativo")||NetworkGuard.ArmedState!=false)throw new InvalidOperationException("Pare e libere o túnel geral primeiro.");
-   foreach(var process in Process.GetProcessesByName("Discord")){process.Dispose();throw new InvalidOperationException("Feche o Discord antes de ativar.");}
-   ProxyDiagnostics.ProxyIp(profile.Host,profile.Port,profile.User,profile.Password);
+   // Discord can remain open
+   if(profile.WireGuard==null)ProxyDiagnostics.ProxyIp(profile.Host,profile.Port,profile.User,profile.Password);
    SecureDirectory(Path.GetDirectoryName(PrivateRoot));SecureDirectory(PrivateRoot);
    string exe=Path.Combine(PrivateRoot,"Litfix-Discord.exe");using(var resource=System.Reflection.Assembly.GetExecutingAssembly().GetManifestResourceStream("PKAengine.exe")){if(resource==null)throw new IOException("O pacote não contém o motor permanente.");using(var target=File.Create(exe))resource.CopyTo(target);}File.WriteAllBytes(ProfileFile,Encode(profile));
    string xml=Path.Combine(PrivateRoot,"task.xml");File.WriteAllText(xml,TaskXml(WindowsIdentity.GetCurrent().User.Value,exe),Encoding.Unicode);
@@ -124,7 +131,7 @@ public static class DiscordProxy
   while(File.Exists(ProfileFile)&&!File.Exists(stop)){long revisionAtStart=DashboardRevision;
    try{
     var profile=Decode(File.ReadAllBytes(ProfileFile));var found=AppDiscovery.Find(true);if(found.Length>0)profile.DiscordPath=found[0];Validate(profile);
-    var request=new EngineRequest{PermanentDiscord=true,Protocol="SOCKS5",Route=new RoutingOptions{Udp=false},Host=profile.Host,Port=profile.Port,User=profile.User,Password=profile.Password,OwnerPath=Process.GetCurrentProcess().MainModule.FileName,OwnerPid=Process.GetCurrentProcess().Id,OwnerStart=Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks};
+    var request=new EngineRequest{PermanentDiscord=true,WireGuard=profile.WireGuard,Protocol="SOCKS5",Route=new RoutingOptions{Udp=false},Host=profile.Host,Port=profile.Port,User=profile.User,Password=profile.Password,OwnerPath=Process.GetCurrentProcess().MainModule.FileName,OwnerPid=Process.GetCurrentProcess().Id,OwnerStart=Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks};
     long revision=DashboardRevision;if(revision!=0){request=new JavaScriptSerializer().Deserialize<EngineRequest>(Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(DashboardFile),null,DataProtectionScope.CurrentUser)));request.DashboardOwnerPid=request.OwnerPid;request.DashboardOwnerStart=request.OwnerStart;if(!DashboardOwnerAlive(request)){ClearDashboard();continue;}request.PermanentDiscord=true;request.DiscordOverlay=profile;request.OwnerPath=Process.GetCurrentProcess().MainModule.FileName;request.OwnerPid=Process.GetCurrentProcess().Id;request.OwnerStart=Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;}request.DashboardStamp=revision;
     request.Route.Apps.Add(new RegisteredApp{Path=profile.DiscordPath});
     // Keep every installed Discord version in the persistent per-app guard.

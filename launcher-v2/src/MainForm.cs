@@ -11,6 +11,7 @@ public class MainForm:Form
  CheckBox global=new ReadableCheckBox(),auto=new ReadableCheckBox();CheckedListBox apps=new CheckedListBox();ComboBox launch=new ComboBox();CheckBox socks=new ReadableCheckBox(),https=new ReadableCheckBox(),udp=new ReadableCheckBox(),proxyTls=new ReadableCheckBox();TextBox tlsName=new TextBox();ListView appResults=new ListView();string tunnelIp="",activeProtocol="";
  TextBox discordHost=new TextBox(),discordUser=new TextBox(),discordPassword=new TextBox(),discordPath=new TextBox();NumericUpDown discordPort=new NumericUpDown();Label discordState=new Label();Button discordEnable,discordRemove,discordTest,discordBrowse;bool permanentConfigured,discordRunning;
  ProxyPicker generalPicker,discordPicker;System.Collections.Generic.List<ProxyPreset> presets=new System.Collections.Generic.List<ProxyPreset>();ProxyPreset generalManual,discordManual;bool loadingPickers=true,generalWasAutomatic,discordWasAutomatic;
+ ComboBox discordConnection=new ComboBox();Button discordImportWireGuard;Label discordWireGuardInfo=new Label(),discordWireGuardHelp=new Label();Panel discordSettingsPanel;WireGuardProfile discordWireGuard;
  Panel discordPage=new Panel(),dashboard=new Panel(),applicationPage=new Panel(),testPage=new Panel(),content=new Panel();
  Label state=new Label(),testState=new Label(),exitIp=new Label(),updateState=new Label();Button connect,stop,release,test,updateButton;PendingUpdate pendingUpdate;bool checkingUpdate;DateTime lastUpdateCheck=DateTime.MinValue;
  RoutingOptions route=new RoutingOptions();bool busy,active,preview,healthy=true,checkingHealth,refreshingApps;int sessionVersion;DateTime lastHealth=DateTime.UtcNow;Timer monitor=new Timer();
@@ -23,12 +24,13 @@ public class MainForm:Form
   sidebar.Controls.Add(Label("Litfix",24,28,155,48,30,light));sidebar.Controls.Add(Label("PROXY LAUNCHER",25,82,165,25,10,Color.White));
   string[] names={"Proxy geral","Discord","Aplicativos","Teste"};Panel[] pages={dashboard,discordPage,applicationPage,testPage};
   for(int i=0;i<4;i++){Panel page=pages[i];var b=Button(names[i],20,153+i*56,165,false);b.Click+=(s,e)=>ShowPage(page);sidebar.Controls.Add(b);}
-  updateState=Label("Atualização automática\nLushen16/LIT-fix",24,410,165,100,9,light);sidebar.Controls.Add(updateState);
+  var wireguard=Button("VPN geral",20,377,165,false);wireguard.BackColor=Color.FromArgb(127,65,211);wireguard.Click+=(s,e)=>{if(busy)return;using(var dialog=new WireGuardDialog())dialog.ShowDialog(this);RefreshState();};sidebar.Controls.Add(wireguard);
+  updateState=Label("Atualização automática\nLushen16/LIT-fix",24,430,165,100,9,light);sidebar.Controls.Add(updateState);
   sidebar.Controls.Add(Label("V"+UpdateService.Current,24,544,87,30,9,muted));updateButton=Button("Atualizar",113,540,80,true);updateButton.Height=32;updateButton.Font=new Font(UiFont(),9,FontStyle.Bold);updateButton.BackColor=Color.FromArgb(127,65,211);updateButton.FlatAppearance.BorderColor=Color.FromArgb(168,108,244);updateButton.Visible=false;updateButton.Click+=async(s,e)=>await InstallPendingUpdate();sidebar.Controls.Add(updateButton);sidebar.Controls.Add(Label("WINDOWS x64\nSOCKS5 / HTTPS\n\nTCP / UDP via SOCKS5\nIPv6 bloqueado",24,583,165,110,9,muted));
   content.SetBounds(225,20,835,720);content.Anchor=AnchorStyles.Top|AnchorStyles.Bottom|AnchorStyles.Left|AnchorStyles.Right;Controls.Add(content);
   foreach(Panel page in pages){page.Dock=DockStyle.Fill;page.AutoScroll=true;page.BackColor=bg;content.Controls.Add(page);}
   BuildDashboard();BuildApps();BuildTests();BuildDiscord();ApplyReadableColors(this);ShowPage(dashboard);host.TextChanged+=(s,e)=>InvalidateResults();port.ValueChanged+=(s,e)=>InvalidateResults();user.TextChanged+=(s,e)=>InvalidateResults();password.TextChanged+=(s,e)=>InvalidateResults();
-  if(!preview){var dp=DiscordProxy.Load();discordHost.Text=dp.Host;discordPort.Value=dp.Port>0&&dp.Port<=65535?dp.Port:1080;discordUser.Text=dp.User;discordPassword.Text=dp.Password;discordPath.Text=dp.DiscordPath;if(!File.Exists(discordPath.Text)){var found=AppDiscovery.Find(true);if(found.Length>0)discordPath.Text=found[0];}permanentConfigured=DiscordProxy.HasConfiguration;var saved=SessionStore.Load();if(saved!=null){proxyTls.Checked=saved.ProxyTls??true;tlsName.Text=saved.TlsName??"";socks.Checked=saved.Protocol!="HTTPS";https.Checked=saved.Protocol=="HTTPS"||saved.Protocol=="BOTH";host.Text=saved.Host??"";port.Value=saved.Port>0&&saved.Port<=65535?saved.Port:1080;user.Text=saved.User??"";password.Text=saved.Password();route=saved.Route??new RoutingOptions();route.Ipv6=false;udp.Checked=route.Udp||route.DirectDiscordCalls;if(route.Apps==null)route.Apps=new System.Collections.Generic.List<RegisteredApp>();if(route.Apps.Count==0&&!String.IsNullOrWhiteSpace(saved.Game)&&File.Exists(saved.Game))route.Apps.Add(new RegisteredApp{Path=saved.Game});}global.Checked=route.Global;auto.Checked=route.AutoLaunch;RefreshApps();}
+  if(!preview){var dp=DiscordProxy.Load();discordWireGuard=dp.WireGuard;discordConnection.SelectedIndex=dp.WireGuard==null?0:1;discordHost.Text=dp.Host;discordPort.Value=dp.Port>0&&dp.Port<=65535?dp.Port:1080;discordUser.Text=dp.User;discordPassword.Text=dp.Password;discordPath.Text=dp.DiscordPath;if(!File.Exists(discordPath.Text)){var found=AppDiscovery.Find(true);if(found.Length>0)discordPath.Text=found[0];}permanentConfigured=DiscordProxy.HasConfiguration;var saved=SessionStore.Load();if(saved!=null){proxyTls.Checked=saved.ProxyTls??true;tlsName.Text=saved.TlsName??"";socks.Checked=saved.Protocol!="HTTPS";https.Checked=saved.Protocol=="HTTPS"||saved.Protocol=="BOTH";host.Text=saved.Host??"";port.Value=saved.Port>0&&saved.Port<=65535?saved.Port:1080;user.Text=saved.User??"";password.Text=saved.Password();route=saved.Route??new RoutingOptions();route.Ipv6=false;udp.Checked=route.Udp||route.DirectDiscordCalls;if(route.Apps==null)route.Apps=new System.Collections.Generic.List<RegisteredApp>();if(route.Apps.Count==0&&!String.IsNullOrWhiteSpace(saved.Game)&&File.Exists(saved.Game))route.Apps.Add(new RegisteredApp{Path=saved.Game});}global.Checked=route.Global;auto.Checked=route.AutoLaunch;RefreshApps();}
   LoadPickers();
   monitor.Interval=4000;monitor.Tick+=async(s,e)=>{if(!busy){RefreshState();if(!checkingUpdate&&(DateTime.UtcNow-lastUpdateCheck).TotalMinutes>=15)await AutoUpdateAsync();if(active&&!checkingHealth&&(DateTime.UtcNow-lastHealth).TotalSeconds>=30)await CheckHealth();}};if(!preview)monitor.Start();
   FormClosing+=(s,e)=>{if(busy){e.Cancel=true;return;}if(!preview)Save();};FormClosed+=(s,e)=>monitor.Dispose();RefreshState();
@@ -76,38 +78,55 @@ public class MainForm:Form
  void BuildDiscord()
  {
   discordPage.Controls.Add(Label("Discord",0,4,810,48,24,Color.White));
-  discordPage.Controls.Add(Label("Uma proxy exclusiva, mesmo com o Litfix fechado.",0,59,810,30,10,muted));
+  discordPage.Controls.Add(Label("Proxy ou Proton VPN somente no Discord, mesmo com o Litfix fechado.",0,59,810,30,10,muted));
   discordState=Label("Sem proxy permanente",20,18,770,38,14,light);discordPage.Controls.Add(Card(0,100,815,70,discordState));
-  var settings=new Panel{Left=0,Top=190,Width=815,Height=330,BackColor=card};discordPage.Controls.Add(settings);
-  settings.Controls.Add(Label("SOCKS5",20,15,770,28,10,light));
+  var settings=new Panel{Left=0,Top=190,Width=815,Height=330,BackColor=card};discordSettingsPanel=settings;discordPage.Controls.Add(settings);
+  discordConnection.Items.AddRange(new object[]{"Proxy SOCKS5","WireGuard / Proton VPN"});discordConnection.DropDownStyle=ComboBoxStyle.DropDownList;discordConnection.SetBounds(20,12,250,30);Style(discordConnection);settings.Controls.Add(discordConnection);
+  discordImportWireGuard=Button("Importar Proton .conf",290,10,220,false);discordImportWireGuard.Height=34;discordImportWireGuard.Click+=(sender,e)=>ImportDiscordWireGuard();settings.Controls.Add(discordImportWireGuard);
+  discordWireGuardInfo=Label("Sem arquivo importado",530,14,260,28,9,light);settings.Controls.Add(discordWireGuardInfo);discordConnection.SelectedIndex=0;discordConnection.SelectedIndexChanged+=(sender,e)=>SetDiscordConnectionEditing();
   Field(settings,"IPv4 da proxy",discordHost,20,58,550);
   settings.Controls.Add(Label("Porta",600,58,185,24,10,muted));discordPort.SetBounds(600,87,185,32);discordPort.Minimum=1;discordPort.Maximum=65535;discordPort.Value=1080;Style(discordPort);settings.Controls.Add(discordPort);
   Field(settings,"Usuário",discordUser,20,142,350);Field(settings,"Senha",discordPassword,400,142,385);discordPassword.UseSystemPasswordChar=true;
   Field(settings,"Discord.exe",discordPath,20,224,550);discordPath.ReadOnly=true;
   discordBrowse=Button("Localizar Discord",600,253,185,false);discordBrowse.Click+=(sender,e)=>{using(var picker=new OpenFileDialog{Filter="Discord (Discord.exe)|Discord.exe",CheckFileExists=true})if(picker.ShowDialog(this)==DialogResult.OK)discordPath.Text=picker.FileName;};settings.Controls.Add(discordBrowse);
   discordTest=Button("Testar proxy",0,546,250,false);discordTest.Click+=async(sender,e)=>await TestDiscord();discordPage.Controls.Add(discordTest);
-  discordEnable=Button("Ativar permanente",277,546,250,true);discordEnable.Click+=async(sender,e)=>await EnableDiscord();discordPage.Controls.Add(discordEnable);
-  discordRemove=Button("Remover configuração",554,546,261,false);discordRemove.BackColor=Color.FromArgb(183,35,55);discordRemove.ForeColor=Color.White;discordRemove.FlatAppearance.BorderColor=Color.FromArgb(245,82,104);discordRemove.Click+=async(sender,e)=>await RemoveDiscord();discordPage.Controls.Add(discordRemove);
-  discordPage.Controls.Add(Label("Inicia ao entrar no Windows e reconecta em segundo plano. Feche o Discord antes de ativar.\nA configuração permanece até removê-la\nou desinstalar o Litfix. Proxy geral e Discord podem permanecer ativos juntos.",0,612,815,92,10,muted));
-  AddProxyPicker(settings,true);foreach(Control c in discordPage.Controls)if(c.Top>=546)c.Top+=60;
+  discordEnable=Button("Ativar VPN Discord",277,546,250,true);discordEnable.Click+=async(sender,e)=>await EnableDiscord();discordPage.Controls.Add(discordEnable);
+  discordRemove=Button("Desativar VPN Discord",554,546,261,false);discordRemove.BackColor=Color.FromArgb(183,35,55);discordRemove.ForeColor=Color.White;discordRemove.FlatAppearance.BorderColor=Color.FromArgb(245,82,104);discordRemove.Click+=async(sender,e)=>await RemoveDiscord();discordPage.Controls.Add(discordRemove);
+  discordPage.Controls.Add(Label("Inicia ao entrar no Windows e reconecta em segundo plano. O Discord pode estar aberto.\nA configuração permanece até removê-la\nou desinstalar o Litfix. Proxy geral e Discord podem permanecer ativos juntos.",0,612,815,92,10,muted));
+  AddProxyPicker(settings,true);discordWireGuardHelp=Label("Mensagens e chamadas passam pelo Proton VPN.\nOs demais aplicativos continuam na conexão direta.\n\nImporte o arquivo .conf e clique em Ativar permanente.\nSistema Liga/Desliga sob demanda. O Discord pode estar aberto ao ativar.",20,100,770,170,11,light);settings.Controls.Add(discordWireGuardHelp);discordWireGuardHelp.Visible=false;foreach(Control c in discordPage.Controls)if(c.Top>=546)c.Top+=60;
  }
- DiscordProfile DiscordSettings(){return new DiscordProfile{Host=discordHost.Text.Trim(),Port=(int)discordPort.Value,User=discordUser.Text,Password=discordPassword.Text,DiscordPath=discordPath.Text};}
+ DiscordProfile DiscordSettings(){return new DiscordProfile{Host=discordHost.Text.Trim(),Port=(int)discordPort.Value,User=discordUser.Text,Password=discordPassword.Text,DiscordPath=discordPath.Text,WireGuard=discordConnection.SelectedIndex==1?discordWireGuard:null};}
+ void ImportDiscordWireGuard()
+ {
+  if(busy||permanentConfigured)return;
+  using(var picker=new OpenFileDialog{Filter="WireGuard / Proton (*.conf)|*.conf",CheckFileExists=true})if(picker.ShowDialog(this)==DialogResult.OK)try{
+   if(new FileInfo(picker.FileName).Length>32768)throw new ArgumentException("Arquivo muito grande.");var imported=WireGuardProfile.Parse(File.ReadAllText(picker.FileName));var profile=DiscordSettings();profile.WireGuard=imported;DiscordProxy.Save(profile);discordWireGuard=imported;discordConnection.SelectedIndex=1;SetDiscordConnectionEditing();discordState.Text="Proton importado • clique em Ativar VPN Discord";
+  }catch(Exception ex){Error(ex);}
+ }
+ void SetDiscordConnectionEditing()
+ {
+  bool wg=discordConnection.SelectedIndex==1,editable=!busy&&!permanentConfigured;discordConnection.Enabled=editable;discordImportWireGuard.Enabled=editable;discordImportWireGuard.Visible=discordWireGuardInfo.Visible=wg;
+  discordWireGuardInfo.Text=discordWireGuard==null?"Sem arquivo importado":"Arquivo importado • só Discord";
+  discordWireGuardHelp.Visible=wg;discordHost.Visible=discordUser.Visible=discordPassword.Visible=discordPort.Visible=!wg;if(discordSettingsPanel!=null)foreach(Control control in discordSettingsPanel.Controls)if(control is Label&&(control.Text=="IPv4 da proxy"||control.Text=="Porta"||control.Text=="Usuário"||control.Text=="Senha"))control.Visible=!wg;if(discordTest!=null)discordTest.Text=wg?"Testar VPN Discord":"Testar proxy";
+  if(discordPicker!=null){discordPicker.Visible=!wg;discordPicker.SetAvailable(editable&&!wg);}discordHost.Enabled=discordUser.Enabled=discordPassword.Enabled=editable&&!wg;discordPort.Enabled=editable&&!wg&&(discordPicker==null||!discordPicker.Automatic.Checked);
+ }
  async Task TestDiscord()
  {
-  if(busy)return;SetBusy(true);try{var profile=DiscordSettings();DiscordProxy.Validate(profile);discordState.Text="Testando autenticação…";
+  if(busy)return;SetBusy(true);try{var profile=DiscordSettings();if(discordConnection.SelectedIndex==1&&profile.WireGuard==null)throw new ArgumentException("Importe o arquivo .conf do Proton primeiro.");DiscordProxy.Validate(profile);discordState.Text="Testando autenticação…";
+   if(profile.WireGuard!=null){if(!discordRunning){discordState.Text="Arquivo válido • ative permanente para testar o servidor";return;}string vpnIp=await Task.Run(()=>EngineController.RoutedIp(false,true));discordState.Text="VPN Discord OK • IP de saída: "+vpnIp;return;}
    string ip=await Task.Run(()=>{string result=ProxyDiagnostics.ProxyIp(profile.Host,profile.Port,profile.User,profile.Password);return result;});discordState.Text="Proxy OK • IP de saída: "+ip;
   }catch(Exception ex){discordState.Text="Proxy não confirmou conexão";Error(ex);}finally{SetBusy(false);}
  }
  async Task EnableDiscord()
  {
-  if(busy)return;SetBusy(true);EngineRequest resume=null;try{if(active){EnsureAppsClosed(route.SelectedPaths());resume=new EngineRequest{Protocol=activeProtocol.Length>0?activeProtocol:Selection(),ProxyTls=proxyTls.Checked,TlsName=tlsName.Text.Trim(),Route=route.Copy(),Host=host.Text.Trim(),Port=(int)port.Value,User=user.Text,Password=password.Text};await Task.Run(()=>EngineController.RunElevated(null,true));await Task.Run(()=>EngineController.ReleaseGuard());active=false;}else if(NetworkGuard.ArmedState==true)throw new InvalidOperationException("Use Liberar rede direta antes de ativar o Discord permanente.");
-   var profile=DiscordSettings();DiscordProxy.Validate(profile);EnsureAppsClosed(new[]{profile.DiscordPath});DiscordProxy.Save(profile);discordState.Text="Configurando início automático… permita o aviso do Windows";
+  if(busy)return;SetBusy(true);EngineRequest resume=null;try{if(WireGuardIntegration.HasService)throw new InvalidOperationException("Desative a VPN WireGuard antes de ativar o Discord permanente.");if(active){EnsureAppsClosed(route.SelectedPaths());resume=new EngineRequest{Protocol=activeProtocol.Length>0?activeProtocol:Selection(),ProxyTls=proxyTls.Checked,TlsName=tlsName.Text.Trim(),Route=route.Copy(),Host=host.Text.Trim(),Port=(int)port.Value,User=user.Text,Password=password.Text};await Task.Run(()=>EngineController.RunElevated(null,true));await Task.Run(()=>EngineController.ReleaseGuard());active=false;}else if(NetworkGuard.ArmedState==true)throw new InvalidOperationException("Use Liberar rede direta antes de ativar o Discord permanente.");
+   var profile=DiscordSettings();if(discordConnection.SelectedIndex==1&&profile.WireGuard==null)throw new ArgumentException("Importe o arquivo .conf do Proton primeiro.");DiscordProxy.Validate(profile);// Discord can remain openDiscordProxy.Save(profile);discordState.Text="Configurando início automático… permita o aviso do Windows";
    await Task.Run(()=>DiscordProxy.Elevated(true));permanentConfigured=DiscordProxy.HasConfiguration;if(resume!=null)await Task.Run(()=>EngineController.RunElevated(resume,false));Log("Proxy permanente do Discord configurada. A janela pode ser fechada.");
   }catch(Exception ex){permanentConfigured=DiscordProxy.HasConfiguration;if(resume!=null&&!permanentConfigured)Log("Proxy geral parada durante a alteração; ative novamente.");Error(ex);}finally{SetBusy(false);RefreshState();}
  }
  async Task RemoveDiscord()
  {
-  if(busy)return;SetBusy(true);try{discordState.Text="Removendo configuração permanente…";await Task.Run(()=>DiscordProxy.Elevated(false));permanentConfigured=DiscordProxy.HasConfiguration;discordPassword.Clear();Log("Configuração permanente removida; rede do Discord liberada.");}
+  if(busy)return;SetBusy(true);try{discordState.Text="Removendo configuração permanente…";await Task.Run(()=>DiscordProxy.Elevated(false));permanentConfigured=DiscordProxy.HasConfiguration;discordWireGuard=null;discordPassword.Clear();Log("Configuração permanente removida; rede do Discord liberada.");}
   catch(Exception ex){permanentConfigured=DiscordProxy.HasConfiguration;Error(ex);}finally{SetBusy(false);RefreshState();}
  }
 
@@ -147,7 +166,7 @@ public class MainForm:Form
   host.ReadOnly=user.ReadOnly=password.ReadOnly=generalPicker.Automatic.Checked;port.Enabled=!busy&&!active&&!generalPicker.Automatic.Checked;
   discordHost.ReadOnly=discordUser.ReadOnly=discordPassword.ReadOnly=discordPicker.Automatic.Checked;discordPort.Enabled=!busy&&!permanentConfigured&&!discordPicker.Automatic.Checked;
   generalPicker.SetAvailable(!busy&&!active);discordPicker.SetAvailable(!busy&&!permanentConfigured);
-  generalPicker.Import.Enabled=discordPicker.Import.Enabled=!busy&&!active&&!permanentConfigured;
+  generalPicker.Import.Enabled=discordPicker.Import.Enabled=!busy&&!active&&!permanentConfigured;SetDiscordConnectionEditing();
  }
  void SavePickerState()
  {
@@ -194,6 +213,7 @@ public class MainForm:Form
  {
   if(busy)return;SetBusy(true);try {
    permanentConfigured=DiscordProxy.HasConfiguration;
+   if(WireGuardIntegration.HasService)throw new InvalidOperationException("Desative a VPN WireGuard antes de ativar a Proxy geral.");
    if(active)throw new InvalidOperationException("Pare o túnel antes de alterar a configuração.");
    if(NetworkGuard.ArmedState==true&&!permanentConfigured)throw new InvalidOperationException("O bloqueio anterior permanece ativo. Libere a rede direta antes de criar uma nova sessão.");
    ConfigureGeneralRouting();if(!route.Global&&!route.DirectDiscordCalls&&!permanentConfigured&&!route.Udp&&route.Apps.Exists(a=>a.Selected&&String.Equals(Path.GetFileName(a.Path),"Discord.exe",StringComparison.OrdinalIgnoreCase)))throw new InvalidOperationException("Marque Chamadas / UDP e use SOCKS5 com UDP para proteger o Discord. HTTPS CONNECT não transporta chamadas.");
@@ -253,14 +273,14 @@ public class MainForm:Form
   Color green=Color.FromArgb(99,242,149),normal=Color.FromArgb(145,181,230);
   SetDisabledColors(dashboard,active?green:light);SetDisabledColors(discordPage,discordRunning?green:light);
   connect.Text=active?"Proxy ativada":"Ativar proxy";connect.ForeColor=active?green:Color.White;((ReadableButton)connect).DisabledTextColor=active?green:normal;
-  discordEnable.Text=discordRunning?"Permanente ativado":"Ativar permanente";discordEnable.ForeColor=discordRunning?green:Color.White;((ReadableButton)discordEnable).DisabledTextColor=discordRunning?green:normal;
+  discordEnable.Text=discordRunning?"VPN Discord Ativada":"Ativar VPN Discord";discordEnable.ForeColor=discordRunning?green:Color.White;((ReadableButton)discordEnable).DisabledTextColor=discordRunning?green:normal;
  }
  void RefreshState()
  {
   bool wasActive=active;string mode=preview?"NONE":EngineController.Mode();active=mode=="NORMAL"||mode=="COMBINED";discordRunning=mode=="DISCORD"||mode=="COMBINED";
   bool? guarded=preview?(bool?)false:NetworkGuard.ArmedState;
   state.Text=active?(healthy?"Proxy geral conectada":"Erro de conectividade • motor ativo"):discordRunning?"Proxy geral disponível • Discord permanente ativo":!guarded.HasValue?"Proteção não consultada":guarded.Value?"Túnel parado • saída direta bloqueada":"Desconectado • rede direta liberada";
-  discordState.Text=permanentConfigured?(discordRunning?"Proxy permanente ativa":"Proxy permanente configurada • aguardando reconexão"):"Sem proxy permanente";
+  string discordKind=discordWireGuard!=null&&discordConnection.SelectedIndex==1?"VPN Discord":"Proxy Discord";discordState.Text=permanentConfigured?(discordRunning?discordKind+" permanente ativa":discordKind+" configurada • aguardando reconexão"):"Sem conexão permanente";
   state.ForeColor=active?Color.FromArgb(99,242,149):light;discordState.ForeColor=discordRunning?Color.FromArgb(99,242,149):light;
   if(wasActive&&!active){tunnelIp="";RefreshAppResults();}SetBusy(busy);
  }
